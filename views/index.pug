@@ -1,0 +1,93 @@
+html
+  head
+    title= title
+    include head.pug
+  body
+    div.container
+      h1 Chores System
+      h4.pt-3
+        span Kids
+        button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#kid-modal") Add Kid
+ 
+      div.row(id="kids")
+        div.col-lg-3.col-md-4.col-sm-6
+          div.card
+            img(src="images/avatar_placeholder.png")
+            div.card-body
+              h5.card-title No Kids Found
+              p Click the "Add Kid" button to add your first kid!
+
+      h4.pt-3
+        span Chores
+        button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#chore-modal") Add Chore
+
+  div.modal(id="kid-modal" tabindex="-1")
+    div.modal-dialog
+      div.modal-content
+        div.modal-header
+          h5.modal-title New Kiddo
+          button.btn-close(data-bs-dismiss="modal")
+        div.modal-body
+          form(id="kid-form")
+            div.mb-3
+              div.image_container
+                img(id="kid-image-raw" style="width: 100%;")
+
+              label.col-form-label(for="kid-image") Picture:
+              input.form-control(type="file" name="kid_image" id="kid-image" onchange="update_image(this, 'kid-image-raw');")
+
+              label.col-form-label(for="kid-name") Name:
+              input.form-control(type="text" name="kid_name" id="kid-name")
+
+              label.col-form-label(for="kid-name") Username:
+              input.form-control(type="text" name="kid_username" id="kid-username")
+
+              label.col-form-label(for="kid-name") password:
+              input.form-control(type="password" name="kid_password" id="kid-password")
+
+              label.col-form-label(for="kid-description") About:
+              input.form-control(type="text" name="kid_description" id="kid-description")
+
+              label.col-form-label(for="kid-money") Starting Allowance:
+              input.form-control(type="text" name="kid_money" id="kid-money")
+
+              label.col-form-label(for="kid-fw-id") FW Rule ID:
+              input.form-control(type="text" name="kid_fw_id" id="kid-fw-id")
+
+        div.modal-footer
+          button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
+          button.btn.btn-primary(form="kid-form") Save
+ 
+  div.modal(id="chore-modal" tabindex="-1")
+    div.modal-dialog
+      div.modal-content
+        div.modal-header
+          h5.modal-title New Chore
+          button.btn-close(data-bs-dismiss="modal")
+        div.modal-body
+          form(id="chore-form")
+            div.mb-3
+              div.image_container
+                img(id="chore-image-raw" style="width: 100%;")
+
+              label.col-form-label(for="chore-image") Picture:
+              input.form-control(type="file" name="chore_image" id="chore-image" onchange="update_image(this, 'chore-image-raw');")
+
+              label.col-form-label(for="chore-name") Name:
+              input.form-control(type="text" name="chore_name" id="chore-name")
+
+              label.col-form-label(for="chore-description") Description:
+              input.form-control(type="text" name="chore_description" id="chore-description")
+
+              label.col-form-label(for="chore-pay") Pay:
+              input.form-control(type="text" name="chore_pay" id="chore-pay")
+ 
+              label.col-form-label(for="chore-assignment") Assignment:
+              input.form-control(type="text" name="chore_assignment" id="chore-assignment")
+             
+        div.modal-footer
+          button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
+          button.btn.btn-primary(form="chore-form") Save
+
+  include foot.pug
+  script(src='js/chores.js') 

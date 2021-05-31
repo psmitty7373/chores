@@ -1,0 +1,17 @@
+html
+  head
+    title= title
+    include head.pug
+    link(rel='stylesheet', href='/css/login.css')
+  body.text-center
+    main.form-login
+      form(action="/login", method="POST")
+        h3.h3.mb-3.fw-normal Chores System
+        div.form-floating
+          input.form-control(name="username" id="username" type="text")
+          label(for="username") Username
+        div.form-floating
+          input.form-control(name="password" id="password" type="password")
+          label(for="password") Password
+        button.w-100.btn.btn-lg.btn-primary(type="submit") Login
+    include foot.pug

@@ -1,0 +1,125 @@
+html(lang="en")
+  include head.pug
+  body
+    include nav.pug
+    div.container
+      h4.pt-3 #{chore.name}
+      div.card.mb-3
+        div.row.g-0
+          div.col-md-3
+            img(src='/images/' + chore.image, style="width: 100%")
+          div.col-md-9
+            div.card-body
+              h5.card-title
+                span #{chore.name}
+                span.float-end
+                  button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="#chore-finish-modal") Finished
+                  if (user.role === "admin")
+                    button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#chore-modal") Edit
+                    button.btn.btn-danger Delete
+              p.card-text #{chore.description}
+              h6 $#{chore.pay}
+    
+      if (user.role === "admin")
+        h4.pt-3 Assignment
+        div.row
+          each kid in kids
+            div.col-lg-2.col-md-4.col-sm-6
+              if (kid.username === chore.assignment)
+                div.card(class={"card-focus": kid.username === chore.assignment} onclick="assign('', '" + chore.name + "');")
+                  img(src="/images/" + kid.image)
+                  div.card-body
+                    a.stretched-link(href="#" style="color: inherit; text-decoration: inherit;")
+                    h5.card-title #{kid.name}
+
+              else
+                div.card(class={"card-focus": kid.username === chore.assignment} onclick="assign('" + kid.username + "', '" + chore.name + "');")
+                  img(src="/images/" + kid.image)
+                  div.card-body
+                    a.stretched-link(href="#" style="color: inherit; text-decoration: inherit;")
+                    h5.card-title #{kid.name}
+    
+      h4.pt-3 Timeline
+
+      if (!chore_log || chore_log.length == 0)
+        div.card
+          div.card-body
+            h5.card-title No history yet!
+            p.card-text No one has completed this chore yet :(
+  
+      else
+        each log in chore_log
+          div.row.g-0.timeline-entry(style="position: relative")
+            div.card.mb-3
+              div.row.g-0
+                div.col-md-2
+                  img(src='/images/' + log.image, style="width: 100%")
+                div.col-md-9
+                  div.card-body
+                    p.card-text #{log.kid_name}, completed this task on ___ with this to say: "#{log.notes}" ~#{log.kid_name}
+                    p.card-text $#{log.pay}
+                div.col-md-1
+                  img.circle-crop(src='/images/' + log.kid_image, style="width:100%")
+      
+    div.modal(id="chore-finish-modal" tabindex="-1")
+      div.modal-dialog
+        div.modal-content
+          div.modal-header
+            h5.modal-title Finished Chore
+            button.btn-close(data-bs-dismiss="modal")
+          div.modal-body
+            p Nice work!  Make sure to add a picture of your work and some notes about your chore.
+            form(id="chore-finish-form")
+              div.mb-3
+                div.image_container
+                  img(id="chore-finish-image-raw" style="width: 100%;")
+    
+                label.col-form-label(for="chore-finish-image") Picture:
+                input.form-control(type="file" id="chore-finish-image" onchange="update_image(this, 'chore-finish-image-raw');")
+    
+                label.col-form-label(for="chore-finish-notes") Notes:
+                input.form-control(type="text" name="chore_finish_notes" id="chore-finish-notes")
+    
+                input(type="text" name="kid_name" value=user.username readonly style="display: none;")
+                input(type="text" name="chore_name" value=chore.name readonly style="display: none;")
+                input(type="text" name="action" value="finish" style="display: none;")
+    
+          div.modal-footer
+            button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
+            button.btn.btn-primary(form="chore-finish-form") Save
+   
+    div.modal(id="chore-modal" tabindex="-1")
+      div.modal-dialog
+        div.modal-content
+          div.modal-header
+            h5.modal-title Edit Chore
+            button.btn-close(data-bs-dismiss="modal")
+          div.modal-body
+            form(id="chore-form")
+              div.mb-3
+                div.image_container
+                  img(id="chore-image-raw" style="width: 100%;" src="/images/" + chore.image)
+    
+                label.col-form-label(for="chore-image") Picture:
+                input.form-control(type="file" id="chore-image" onchange="update_image(this, 'chore-image-raw');")
+    
+                label.col-form-label(for="chore-name") Name:
+                input.form-control(type="text" name="chore_name" id="chore-name" value=chore.name readonly)
+    
+                label.col-form-label(for="chore-description") Description:
+                input.form-control(type="text" name="chore_description" id="chore-description" value=chore.description)
+    
+                label.col-form-label(for="chore-pay") Pay:
+                input.form-control(type="text" name="chore_pay" id="chore-pay" value=chore.pay)
+    
+                label.col-form-label(for="chore-assignment") Assignment:
+                input.form-control(type="text" name="chore_assignment" id="chore-assignment" value=chore.assignment)
+    
+                input(type="text" name="action" value="update" style="display: none;")
+    
+          div.modal-footer
+            button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
+            button.btn.btn-primary(form="chore-form") Save
+     
+include foot.pug
+script(src='/js/chores.js') 

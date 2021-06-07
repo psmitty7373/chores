@@ -1,0 +1,36 @@
+.card-focus {
+    color: #212529;
+    background-color: #cde1ff;
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 .25rem rgba(13,110,253,.25);
+}
+
+.circle-crop {
+    width: 100px;
+    height: 100px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+    padding: 5px;
+}
+
+.timeline-entry {
+    position: relative;
+    border-left: 1px solid rgba(0,0,0,.125);
+    padding-left: 20px;
+}
+
+.timeline-entry:before {
+    content: "";
+    width: 15px;
+    height: 15px;
+    background: white;
+    border: 1px solid rgba(0,0,0,.125);
+    box-shadow: 3px 3px 0px #9a9a9a;
+    box-shadow: 3px 3px 0px #9a9a9a;
+    border-radius: 50%;
+    position: absolute;
+    left: -9px;
+    top: 10px;
+}

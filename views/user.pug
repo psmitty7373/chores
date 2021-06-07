@@ -1,0 +1,43 @@
+html(lang="en")
+  include head.pug
+  body
+    include nav.pug
+    div.container
+      h4.pt-3 #{user.username}
+      div.card.mb-3
+        div.row.g-0
+          div.col-md-3
+            img(src='/images/' + user.image, style="width: 100%")
+          div.col-md-9
+            div.card-body
+              h5.card-title
+                span #{user.name}
+                span.float-end
+                  button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#chore-modal") Edit
+                  button.btn.btn-danger Delete
+              p.card-text #{user.description}
+              p.card-text $#{user.pay}
+
+      h4.pt-3 Chore Log
+
+      if (!chore_log || chore_log.length == 0)
+        div.card
+          div.card-body
+            h5.card-title No history yet!
+            p.card-text You have not completed any chores yet :(
+
+      else
+        each log in chore_log
+          div.row.g-0.timeline-entry(style="position: relative")
+            div.card.mb-3
+              div.row.g-0
+                div.col-md-2
+                  img(src='/images/' + log.image, style="width: 100%")
+                div.col-md-10
+                  div.card-body
+                    h5.card-title #{log.chore_name}
+                    p.card-text You completed this task on ___ with this to say: "#{log.notes}" ~#{log.kid_name}
+                    p.card-text You earned $#{log.pay} by completing this chore.
+    
+include foot.pug
+script(src='/js/chores.js') 

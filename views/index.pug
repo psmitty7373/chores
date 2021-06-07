@@ -1,26 +1,93 @@
-html
-  head
-    title= title
-    include head.pug
+html(lang="en")
+  include head.pug
   body
+    include nav.pug
     div.container
-      h1 Chores System
-      h4.pt-3
-        span Kids
-        button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#kid-modal") Add Kid
- 
-      div.row(id="kids")
-        div.col-lg-3.col-md-4.col-sm-6
-          div.card
-            img(src="images/avatar_placeholder.png")
-            div.card-body
-              h5.card-title No Kids Found
-              p Click the "Add Kid" button to add your first kid!
-
+      if (user.role === "admin")
+        h4.pt-3
+          span Kids
+          button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#kid-modal") Add Kid
+    
+        div.row(id="kids")
+          if (!kids || kids.length == 0)
+            div.col-lg-3.col-md-4.col-sm-6
+              div.card
+                img(src="images/avatar_placeholder.png")
+                div.card-body
+                  h5.card-title No Kids Found
+                  p Click the "Add Kid" button to add your first kid!
+          else
+            each kid in kids
+              div.col-lg-3.col-md-4.col-sm-6
+                div.card.h-100
+                  img(src="/images/" + kid.image)
+                  div.card-body
+                   a.stretched-link(href="/user/" + kid.username style="color: inherit; text-decoration: inherit;")
+                    h5.card-title #{kid.name}
+                    p.card-text #{kid.description}
+      else
+        h4.pt-3
+          span Welcome, #{user.username}
+        div.card.mb-3
+          div.row.g-0
+            div.col-md-3
+              img(src='/images/' + user.image, style="width: 100%")
+            div.col-md-9
+              div.card-body
+                h5.card-title
+                  span #{user.name}
+                  span.float-end
+                    button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="") Internet
+                p.card-text #{user.description}
+                h6 $#{user.pay}
+    
       h4.pt-3
         span Chores
-        button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#chore-modal") Add Chore
+        if (user.role === "admin")
+          button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#chore-modal") Add Chore
+    
+      div.row(id="chores")
+        if (!chores || chores.length == 0)
+          div.col-lg-3.col-md-4.col-sm-6
+            div.card
+              img(src="images/avatar_placeholder.png")
+              div.card-body
+                h5.card-title No Chores Found
+                p Click the "Add Chore" button to add your first chore!
+    
+        else
+          each chore in chores
+            div.col-lg-3.col-md-4.col-sm-6
+              div.card.h-100
+                img(src="/images/" + chore.image)
+                div.card-body
+                  span #{user.name}
+                  a.stretched-link(href="/chore/" + chore.name style="color: inherit; text-decoration: inherit;")
+                  h5.card-title #{chore.name}
+                  p.card-text #{chore.description}
 
+      if (user.role === "kid")
+        h4.pt-3 Chore Log
+  
+        if (!chore_log || chore_log.length == 0)
+          div.card
+            div.card-body
+              h5.card-title No history yet!
+              p.card-text You have not completed any chores yet :(
+  
+        else
+          each log in chore_log
+            div.row.g-0.timeline-entry(style="position: relative")
+              div.card.mb-3
+                div.row.g-0
+                  div.col-md-2
+                    img(src='/images/' + log.image, style="width: 100%")
+                  div.col-md-10
+                    div.card-body
+                      h5.card-title #{log.chore_name}
+                      p.card-text You completed this task on ___ with this to say: "#{log.notes}" ~#{log.kid_name}
+                      p.card-text You earned $#{log.pay} by completing this chore.
+      
   div.modal(id="kid-modal" tabindex="-1")
     div.modal-dialog
       div.modal-content
@@ -32,32 +99,34 @@ html
             div.mb-3
               div.image_container
                 img(id="kid-image-raw" style="width: 100%;")
-
+    
               label.col-form-label(for="kid-image") Picture:
-              input.form-control(type="file" name="kid_image" id="kid-image" onchange="update_image(this, 'kid-image-raw');")
-
+              input.form-control(type="file" id="kid-image" onchange="update_image(this, 'kid-image-raw');")
+    
               label.col-form-label(for="kid-name") Name:
               input.form-control(type="text" name="kid_name" id="kid-name")
-
+    
               label.col-form-label(for="kid-name") Username:
               input.form-control(type="text" name="kid_username" id="kid-username")
-
+    
               label.col-form-label(for="kid-name") password:
               input.form-control(type="password" name="kid_password" id="kid-password")
-
+    
               label.col-form-label(for="kid-description") About:
               input.form-control(type="text" name="kid_description" id="kid-description")
-
-              label.col-form-label(for="kid-money") Starting Allowance:
-              input.form-control(type="text" name="kid_money" id="kid-money")
-
+    
+              label.col-form-label(for="kid-pay") Starting Allowance:
+              input.form-control(type="text" name="kid_pay" id="kid-pay")
+    
               label.col-form-label(for="kid-fw-id") FW Rule ID:
               input.form-control(type="text" name="kid_fw_id" id="kid-fw-id")
-
+    
+              input(type="text" name="action" value="new" style="display: none;")
+    
         div.modal-footer
           button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
           button.btn.btn-primary(form="kid-form") Save
- 
+    
   div.modal(id="chore-modal" tabindex="-1")
     div.modal-dialog
       div.modal-content
@@ -69,25 +138,27 @@ html
             div.mb-3
               div.image_container
                 img(id="chore-image-raw" style="width: 100%;")
-
+    
               label.col-form-label(for="chore-image") Picture:
-              input.form-control(type="file" name="chore_image" id="chore-image" onchange="update_image(this, 'chore-image-raw');")
-
+              input.form-control(type="file" id="chore-image" onchange="update_image(this, 'chore-image-raw');")
+    
               label.col-form-label(for="chore-name") Name:
               input.form-control(type="text" name="chore_name" id="chore-name")
-
+    
               label.col-form-label(for="chore-description") Description:
               input.form-control(type="text" name="chore_description" id="chore-description")
-
+    
               label.col-form-label(for="chore-pay") Pay:
               input.form-control(type="text" name="chore_pay" id="chore-pay")
- 
+    
               label.col-form-label(for="chore-assignment") Assignment:
               input.form-control(type="text" name="chore_assignment" id="chore-assignment")
-             
+    
+              input(type="text" name="action" value="new" style="display: none;")
+    
         div.modal-footer
           button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
           button.btn.btn-primary(form="chore-form") Save
 
-  include foot.pug
-  script(src='js/chores.js') 
+include foot.pug
+script(src='js/chores.js') 

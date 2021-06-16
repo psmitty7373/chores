@@ -39,32 +39,32 @@ html(lang="en")
                   span.float-end
                     button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="") Internet
                 p.card-text #{user.description}
-                h6 $#{user.pay}
+                h6 Balance: #{user.pay}
     
       h4.pt-3
         span Chores
         if (user.role === "admin")
           button.btn.btn-primary.float-end(data-bs-toggle="modal" data-bs-target="#chore-modal") Add Chore
     
-      div.row(id="chores")
-        if (!chores || chores.length == 0)
-          div.col-lg-3.col-md-4.col-sm-6
-            div.card
-              img(src="images/avatar_placeholder.png")
-              div.card-body
-                h5.card-title No Chores Found
-                p Click the "Add Chore" button to add your first chore!
-    
-        else
-          each chore in chores
+      div.container-fluid.py-2(id="chores", style="overflow: hidden; overflow-x: scroll;")
+        div.row.flex-row.flex-nowrap
+          if (!chores || chores.length == 0)
             div.col-lg-3.col-md-4.col-sm-6
-              div.card.h-100
-                img(src="/images/" + chore.image)
+              div.card
+                img(src="images/avatar_placeholder.png")
                 div.card-body
-                  span #{user.name}
-                  a.stretched-link(href="/chore/" + chore.name style="color: inherit; text-decoration: inherit;")
-                  h5.card-title #{chore.name}
-                  p.card-text #{chore.description}
+                  h5.card-title No Chores Found
+                  p Click the "Add Chore" button to add your first chore!
+    
+          else
+            each chore in chores
+              div.col-lg-3.col-md-4.col-sm-6
+                div.card.h-100
+                  img(src="/images/" + chore.image)
+                  div.card-body
+                    a.stretched-link(href="/chore/" + chore.name style="color: inherit; text-decoration: inherit;")
+                    h5.card-title #{chore.name}
+                    p.card-text #{chore.description}
 
       if (user.role === "kid")
         h4.pt-3 Chore Log
@@ -114,9 +114,6 @@ html(lang="en")
     
               label.col-form-label(for="kid-description") About:
               input.form-control(type="text" name="kid_description" id="kid-description")
-    
-              label.col-form-label(for="kid-pay") Starting Allowance:
-              input.form-control(type="text" name="kid_pay" id="kid-pay")
     
               label.col-form-label(for="kid-fw-id") FW Rule ID:
               input.form-control(type="text" name="kid_fw_id" id="kid-fw-id")

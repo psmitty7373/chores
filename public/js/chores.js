@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
                 formData.kid_image = cropper.getCroppedCanvas({width: 640, height:480}).toDataURL()
             }
 
-            ajax('/kid', formData, function() { location.reload() });
+            ajax('/user', formData, function() { location.reload() });
 
             bootstrap.Modal.getInstance(document.getElementById('kid-modal')).hide()
         });

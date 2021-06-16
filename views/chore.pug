@@ -2,6 +2,9 @@ html(lang="en")
   include head.pug
   body
     include nav.pug
+      li.nav-item
+        a.nav-link.active(href="#") Chore
+
     div.container
       h4.pt-3 #{chore.name}
       div.card.mb-3
@@ -54,12 +57,12 @@ html(lang="en")
               div.row.g-0
                 div.col-md-2
                   img(src='/images/' + log.image, style="width: 100%")
-                div.col-md-9
+                div.col-md-8
                   div.card-body
                     p.card-text #{log.kid_name}, completed this task on ___ with this to say: "#{log.notes}" ~#{log.kid_name}
                     p.card-text $#{log.pay}
-                div.col-md-1
-                  img.circle-crop(src='/images/' + log.kid_image, style="width:100%")
+                div.col-md-2
+                  img.circle-crop(src='/images/' + log.kid_image, style="float: right;")
       
     div.modal(id="chore-finish-modal" tabindex="-1")
       div.modal-dialog

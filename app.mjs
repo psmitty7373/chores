@@ -134,6 +134,11 @@ app.get('/user/:username', (req, res) => {
     let username = req.params.username
     let user = db.chain.get('users').find({ username: username }).value()
     let chore_log = db.chain.get('chore_log').filter({ kid_name: username }).value()
+    let pay = 0
+    for (let i = 0; i < chore_log.length; i++) {
+        pay += parseInt(chore_log[i].pay)
+    }
+    user.pay = pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
     res.render('user', { user: user, chore_log: chore_log })
 })
 
@@ -185,35 +190,66 @@ app.post('/login', (req, res) => {
     }
 })
 
-app.post('/new-kid',
+app.post('/user',
     body('kid_username').isLength({ min: 1 }),
-    body('kid_password').isLength({ min: 1 }),
     (req, res) => {
-        const errors = validationResult(req)
-        if (errors.isEmpty() && !db.chain.get('users').find({ username: req.body.kid_username }).value()) {
-            let kid = { username: xss.inHTMLData(req.body.kid_username), password: req.body.kid_password, name: xss.inHTMLData(req.body.kid_name), description: xss.inHTMLData(req.body.kid_description), pay: xss.inHTMLData(req.body.kid_pay), role: 'kid' }
-            // check if a image was uploaded
-            if (req.body.kid_image) {
-                kid.image = handle_upload(req.body.kid_image)
-            }
+        const errors = validationResult(req).array()
 
-            // push the user
-            db.data.users.push(kid)
+        // not an admin
+        if (req.session.user.role != 'admin') {
+            errors.push({ msg: 'Access denied' })
+        }
 
-            // save the db
-            try {
-                db.write()
-                res.status(200).json({ status: 'success' })
-            } catch (e) {
-                next(e)
+        let found = db.chain.get('users').find({ username: req.body.kid_username }).value()
+        // new, but already exists
+        if (found && req.body.action == 'new') {
+            errors.push({ msg: 'Item already exists' })
+        }
+
+        // not found, but trying to update
+        else if (!found && req.body.action == 'update') {
+            errors.push({ msg: 'Item does not exist' })
+        }
+
+        // make sure password length is good
+        if (req.body.kid_password && req.body.kid_password.length < 8) {
+            errors.push({ msg: 'Password too short' })
+        }
+ 
+        if (!errors.length) {
+            if (req.body.action == 'new' || req.body.action == 'update') {
+                let kid = { username: xss.inHTMLData(req.body.kid_username), name: xss.inHTMLData(req.body.kid_name), description: xss.inHTMLData(req.body.kid_description), fw_id: req.body.kid_fw_id, role: 'kid' }
+
+                if (req.body.kid_password) {
+                    kid.password = req.body.kid_password
+                    if (kid.password.length < 8) {
+                        errors
+                    }
+                }
+
+                // check if a image was uploaded
+                if (req.body.kid_image) {
+                    kid.image = handle_upload(req.body.kid_image)
+                }
+
+                // push the user
+                if (req.body.action == 'new') {
+                    db.data.users.push(kid)
+                } else {
+                    db.chain.get('users').find({ username: req.body.kid_username }).assign(kid).value()
+                }
+
+                // save the db
+                try {
+                    db.write()
+                    res.status(200).json({ status: 'success' })
+                } catch (e) {
+                    next(e)
+                }
             }
         } else {
-            return res.status(400).json({ status: 'error', errors: errors.array() })
+            return res.status(400).json({ status: 'error', errors: errors })
         }
-})
-
-app.post('/delete-kid', (req, res) => {
-
 })
 
 app.post('/chore',
@@ -243,7 +279,7 @@ app.post('/chore',
                     chore.image = handle_upload(req.body.chore_image)
                 }
 
-                // push the user
+                // push the chore
                 if (req.body.action == 'new') {
                     db.data.chores.push(chore)
                 } else {

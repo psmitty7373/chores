@@ -1,22 +1,39 @@
 var cropper = null
-var kids_db = []
+var users_db = []
 
 var formatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
 });
 
-function view_kid(kid) {
-    console.log('v');
+function toast(msg) {
+    var toast = bootstrap.Toast.getInstance(document.querySelector('.toast'))
+    if (toast) {
+        document.getElementById('toast-body').innerHTML = msg
+        toast.show()
+    }
 }
 
-function view_chore(chore) {
-    console.log('c');
+function hide_modal(modal) {
+    if (bootstrap.Modal.getInstance(document.getElementById(modal))) {
+        bootstrap.Modal.getInstance(document.getElementById(modal)).hide()
+    }
 }
 
-function assign(kid, chore) {
-    let data = { action: 'update', chore_name: chore, chore_assignment: kid }
+function toggle_internet(user_id, status) {
+    let data = { action: 'toggle_internet', user_id: user_id, status: status }
+    ajax('/user', data, function() { location.reload() })
+}
+
+function assign(user_id, chore_id) {
+    let data = { action: 'update', chore_id: chore_id, chore_assignment: user_id }
     ajax('/chore', data, function() { location.reload() })
+}
+
+function approve(user, chore_id) {
+    console.log(user, chore_id);
+    let data = { action: 'approve', chore_log_id: chore_id }
+    ajax('/chore_log', data, function() { location.reload() })
 }
 
 function update_image(input, element_id) {
@@ -56,25 +73,35 @@ function ajax(url, data, callback) {
          if (resp.status) {
             if (resp.status == 'success' && callback) {
                 return callback();
+            } else {
+                if (resp.errors) {
+                    let msg = ''
+                    for (let i = 0; i < resp.errors.length; i++) {
+                        if (resp.errors[i].msg) {
+                            msg += resp.errors[i].msg
+                        }
+                    }
+                    toast(msg)
+                }
             }
         }
     })
 }
 
 document.addEventListener('DOMContentLoaded', function(event) {
-    if (document.getElementById('kid-form')) {
-        document.forms['kid-form'].addEventListener('submit', (event) => {
+    if (document.getElementById('user-form')) {
+        document.forms['user-form'].addEventListener('submit', (event) => {
             event.preventDefault()
             const formData = Object.fromEntries(new FormData(event.target))
 
             if (cropper) {
-                formData.kid_image = cropper.getCroppedCanvas({width: 640, height:480}).toDataURL()
+                formData.user_image = cropper.getCroppedCanvas({width: 640, height:480}).toDataURL()
             }
 
-            ajax('/user', formData, function() { location.reload() });
+            ajax('/user', formData, function() { location.reload() })
 
-            bootstrap.Modal.getInstance(document.getElementById('kid-modal')).hide()
-        });
+            hide_modal('user-modal')
+        })
     }
 
     if (document.getElementById('chore-form')) {
@@ -86,10 +113,8 @@ document.addEventListener('DOMContentLoaded', function(event) {
                 formData.chore_image = cropper.getCroppedCanvas({width: 640, height:480}).toDataURL()
             }
 
-            ajax('/chore', formData, function() { location.reload() });
+            ajax('/chore', formData, function() { location.reload() })
 
-            if (bootstrap.Modal.getInstance(document.getElementById('chore-modal')))
-                bootstrap.Modal.getInstance(document.getElementById('chore-modal')).hide()
         })
     }
 
@@ -102,11 +127,43 @@ document.addEventListener('DOMContentLoaded', function(event) {
                 formData.chore_image = cropper.getCroppedCanvas({width: 640, height:480}).toDataURL()
             }
 
-            ajax('/finish', formData, function() { location.reload() });
+            ajax('/chore', formData, function() { location.reload() })
 
-            if (bootstrap.Modal.getInstance(document.getElementById('chore-finish-modal')))
-                bootstrap.Modal.getInstance(document.getElementById('chore-finish-modal')).hide()
+            hide_modal('chore-finish-modal')
         })
     }
 
+    if (document.getElementById('pay-form')) {
+        document.forms['pay-form'].addEventListener('submit', (event) => {
+            event.preventDefault()
+            const formData = Object.fromEntries(new FormData(event.target))
+
+            ajax('/pay_log', formData, function() { location.reload() })
+
+            hide_modal('pay-modal')
+        })
+    }
+
+    if (document.getElementById('spend-form')) {
+        document.forms['spend-form'].addEventListener('submit', (event) => {
+            event.preventDefault()
+            const formData = Object.fromEntries(new FormData(event.target))
+            formData.pay_amount = parseFloat(formData.pay_amount.replace('$',''))
+
+            if (formData.pay_amount > 0) {
+                formData.pay_amount *= -1
+            }
+
+            formData.pay_amount = formData.pay_amount.toString()
+
+            ajax('/pay_log', formData, function() { location.reload() })
+
+            hide_modal('spend-modal')
+        })
+    }
+
+    var toastElList = [].slice.call(document.querySelectorAll('.toast'))
+    var toastList = toastElList.map(function (toastEl) {
+        return new bootstrap.Toast(toastEl)
+    })
 })

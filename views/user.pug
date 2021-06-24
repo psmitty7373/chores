@@ -3,7 +3,11 @@ html(lang="en")
   body
     include nav.pug
       li.nav-item
-        a.nav-link.active(href="#") Kid
+        a.nav-link.active(href="#") #{user.name}
+      li.nav-item
+        span.nav-link /
+      li.nav-item
+        a.nav-link(href="/logout") Logout
  
     div.container
       h4.pt-3 #{user.username}
@@ -11,72 +15,129 @@ html(lang="en")
         div.row.g-0
           div.col-md-3
             img(src='/images/' + user.image, style="width: 100%")
-          div.col-md-9
+
+          div.col-md-7.col-lg-8
             div.card-body
               h5.card-title
                 span #{user.name}
-                span.float-end
-                  button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#kid-modal") Edit
-                  button.btn.btn-danger Delete
               p.card-text #{user.description}
               h6.card-text Balance: #{user.pay}
 
-      h4.pt-3 Chore Log
+          div.col-md-2.col-lg-1.p-1
+            div.d-grid.gap-2
+              button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#user-modal") Edit
+              button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="#pay-modal") Pay
+              div.form-check.form-switch.px-0
+                input.big-switch.form-check-input(type="checkbox" checked=(user.internet_status == true) onclick="toggle_internet(" + user.id + ", " + !user.internet_status + ")")
+      div.row
+        div.col-md-8
+          h4.pt-3 Chore Log
+    
+          if (!chore_log || chore_log.length == 0)
+            div.card
+              div.card-body
+                h5.card-title No history yet!
+                p.card-text You have not completed any chores yet :(
+    
+          else
+            each log in chore_log
+              div.row.g-0.timeline-entry(style="position: relative")
+                div.card.mb-3
+                  div.row.g-0
+                    div.col-md-4.col-lg-3
+                      div(style="position: relative;")
+                        img(src='/images/' + log.image, style="width: 100%")
+                        if (log.status == "pending")
+                          span.stamp.pending PENDING
+                        else if (log.status == "approved")
+                          span.stamp.approved PAID
+                          
+                    div.col-md-8.col-lg-9
+                      div.card-body
+                        span.float-end
+                          if (log.status == "pending")
+                            button.btn.btn-primary(onclick="approve(" + user.id + ", " + log.id + ");") Approve
+    
+                        h5.card-title #{log.chore_name}
+                        p.card-text You completed this task on #{log.timestamp} with this to say:
+                        p.card-text "#{log.description}" ~#{log.user_name}
+                        p.card-text You earned #{log.pay} by completing this chore.
+  
+        div.col-md-4
+          h4.pt-3 Pay Log
 
-      if (!chore_log || chore_log.length == 0)
-        div.card
-          div.card-body
-            h5.card-title No history yet!
-            p.card-text You have not completed any chores yet :(
-
-      else
-        each log in chore_log
-          div.row.g-0.timeline-entry(style="position: relative")
-            div.card.mb-3
-              div.row.g-0
-                div.col-md-2
-                  img(src='/images/' + log.image, style="width: 100%")
-                div.col-md-10
+          if (!pay_log || pay_log.length == 0)
+            div.card
+              div.card-body
+                h5.card-title No history yet!
+                p.card-text You have not been paid anything! :(
+          else
+            each log in pay_log
+              div.row.g-0.timeline-entry(style="position: relative")
+                div.card.mb-3
                   div.card-body
-                    h5.card-title #{log.chore_name}
-                    p.card-text You completed this task on ___ with this to say: "#{log.notes}" ~#{log.kid_name}
-                    p.card-text You earned $#{log.pay} by completing this chore.
+                    h6.card-title #{log.pay}
+                    p.card-text #{log.description}
+                  div.card-footer(style="font-size: 10px;") #{log.timestamp}
 
-  div.modal(id="kid-modal" tabindex="-1")
+  div.modal(id="user-modal" tabindex="-1")
     div.modal-dialog
       div.modal-content
         div.modal-header
           h5.modal-title Edit Kiddo
           button.btn-close(data-bs-dismiss="modal")
         div.modal-body
-          form(id="kid-form")
+          form(id="user-form")
             div.mb-3
               div.image_container
-                img(id="kid-image-raw" style="width: 100%;" src="/images/" + user.image)
+                img(id="user-image-raw" style="width: 100%;" src="/images/" + user.image)
 
-              label.col-form-label(for="kid-image") Picture:
-              input.form-control(type="file" id="kid-image" onchange="update_image(this, 'kid-image-raw');")
+              label.col-form-label(for="user-image") Picture:
+              input.form-control(type="file" id="user-image" onchange="update_image(this, 'user-image-raw');")
 
-              label.col-form-label(for="kid-name") Username:
-              input.form-control(type="text" name="kid_username" id="kid-username" value=user.username readonly)
+              label.col-form-label(for="user-name") Username:
+              input.form-control(type="text" name="user_username" id="user-username" value=user.username readonly)
 
-              label.col-form-label(for="kid-name") Name:
-              input.form-control(type="text" name="kid_name" id="kid-name" value=user.name)
+              label.col-form-label(for="user-name") Name:
+              input.form-control(type="text" name="user_name" id="user-name" value=user.name)
 
-              label.col-form-label(for="kid-name") password:
-              input.form-control(type="password" name="kid_password" id="kid-password")
+              label.col-form-label(for="user-name") password:
+              input.form-control(type="password" name="user_password" id="user-password")
 
-              label.col-form-label(for="kid-description") About:
-              input.form-control(type="text" name="kid_description" id="kid-description" value=user.description)
+              label.col-form-label(for="user-description") About:
+              input.form-control(type="text" name="user_description" id="user-description" value=user.description)
 
-              label.col-form-label(for="kid-fw-id") FW Rule ID:
-              input.form-control(type="text" name="kid_fw_id" id="kid-fw-id" value=user.fw_id)
+              label.col-form-label(for="user-fw-id") FW Rule ID:
+              input.form-control(type="text" name="user_fw_id" id="user-fw-id" value=user.fw_id)
 
+              input(type="hidden" name="user_id" value=user.id)
               input(type="text" name="action" value="update" style="display: none;")
 
         div.modal-footer
           button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
-          button.btn.btn-primary(form="kid-form") Save
+          button.btn.btn-primary(form="user-form") Save
+
+  div.modal(id="pay-modal" tabindex="-1")
+    div.modal-dialog
+      div.modal-content
+        div.modal-header
+          h5.modal-title Issue Payment or Debt
+          button.btn-close(data-bs-dismiss="modal")
+        div.modal-body
+          form(id="pay-form")
+            div.mb-3
+              label.col-form-label(for="pay-amount") Amount:
+              input.form-control(type="text" name="pay_amount" id="pay-amount")
+
+              label.col-form-label(for="pay-description") Description:
+              input.form-control(type="text" name="pay_description" id="pay-description")
+
+              input(type="hidden" name="user_id" value=user.id)
+              input(type="text" name="action" value="new" style="display: none;")
+
+        div.modal-footer
+          button.btn.btn-secondary(data-bs-dismiss="modal") Cancel
+          button.btn.btn-primary(form="pay-form") Save
     
 include foot.pug
 script(src='/js/chores.js') 

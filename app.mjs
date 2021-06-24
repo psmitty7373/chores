@@ -1,6 +1,6 @@
 import pug from 'pug'
 import express from 'express'
-import { body, validationResult } from 'express-validator'
+import { body, oneOf, validationResult } from 'express-validator'
 const app = express()
 import { join, resolve, dirname } from 'path'
 import { LowSync, JSONFileSync } from 'lowdb'
@@ -41,9 +41,14 @@ db.read()
 // allocate an admin if no db available
 if (!db.data) {
     db.data = {
-        users: [ { username: 'admin', password: 'password', role: 'admin' } ],
+        next_user_id: 1,
+        next_chore_id: 0,
+        next_chore_log_id: 0,
+        next_pay_log_id: 0,
+        users: [ { id: 0, username: 'admin', password: 'password', role: 'admin' } ],
         chores: [],
         chore_log: [],
+        pay_log: [],
         sessions: []
     }
     db.write()
@@ -52,7 +57,10 @@ if (!db.data) {
 // prep the db
 db.chain = lodash.chain(db.data)
 
+// use lowdb to store session data
 let lss = lowdbstore(session)
+
+// session params
 var sess = {
     secret: 'ChoresAreFunForMeAndYou',
     cookie: {},
@@ -61,8 +69,15 @@ var sess = {
     store: new lss(db)
 }
 
+// set express to use sessions
 app.use(session(sess))
 
+function epoch_to_pretty(date) {
+    date = new Date(date)
+    return (date.getMonth() + 1) + '-' + date.getDate() + '-' + date.getFullYear() + ' at ' + date.getHours() + ':' + date.getMinutes()
+}
+
+// file upload handler
 function handle_upload(data) {
     let base = join(dirname(''), '/uploads')
 
@@ -100,98 +115,462 @@ function handle_upload(data) {
 
 // grab fw status from edgerouter
 async function get_status(rule_id) {
-    http.get(`http://192.168.1.1:8888/get_status/${rule_id}`, (resp) => {
-        let data = ''
+    return new Promise((resolve) => {
+        http.get(`http://192.168.1.1:8888/get_status/${rule_id}`, (resp) => {
+            let data = ''
 
-        resp.on('data', (chunk) => {
-            data += chunk
+            resp.on('data', (chunk) => {
+                data += chunk
+            })
+
+            resp.on('end', () => {
+                resolve(data.includes('disable'))
+            })
         })
+    })
+}
 
-        resp.on('end', () => {
-            console.log(data)
+async function toggle_internet(rule_id, status) {
+    if (status === false) {
+        status = 'enable'
+    } else {
+        status = 'disable'
+    }
+
+    return new Promise((resolve) => {
+        http.get(`http://192.168.1.1:8888/${status}/${rule_id}`, (resp) => {
+            let data = ''
+
+            resp.on('data', (chunk) => {
+                data += chunk
+            })
+
+            resp.on('end', () => {
+                console.log('end', data)
+                resolve(data)
+            })
         })
     })
 }
 
 app.get('/', (req, res) => {
     if (req.session.loggedin) {
-        let kids = []
-        let chores = db.data.chores
-        let chore_log = db.chain.get('chore_log').filter({ kid_name: req.session.user.username }).value()
-        let user = db.chain.get('users').find({ username: req.session.user.username }).value()
+        let users = []
+        let user = db.chain.get('users').find({ id: req.session.user.id }).cloneDeep().value()
+        let chores = db.chain.get('chores').cloneDeep().value()
+        let chore_log = db.chain.get('chore_log').filter({ user_id: req.session.user.id }).cloneDeep().value().reverse()
+        let pay_log = db.chain.get('pay_log').filter({ user_id : req.session.user.id }).cloneDeep().value().reverse()
 
         if (req.session.user.role == 'admin') {
-            kids = db.chain.get('users').filter({ role: 'kid' }).value()
+            users = db.chain.get('users').filter({ role: 'kid' }).value()
         }
 
-        res.render('index', { user: user, kids: kids, chores: chores, chore_log: chore_log })
+        // calculate total pay
+        let pay = 0
+        for (let i = 0; i < pay_log.length; i++) {
+            pay += parseFloat(pay_log[i].pay)
+        }
+
+        // convert the pay to a normal form
+        user.pay = pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+
+        // format various query results
+        for (let i = 0; i < users.length; i++) {
+            if (!users[i].image) {
+                users[i].image = 'placeholder.png'
+            }
+        }
+
+        for (let i = 0; i < chores.length; i++) {
+            chores[i].pay = chores[i].pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+            if (!chores[i].image) {
+                chores[i].image = 'placeholder.png'
+            }
+        }
+
+        for (let i = 0; i < chore_log.length; i++) {
+            chore_log[i].timestamp = epoch_to_pretty(chore_log[i].timestamp)
+            chore_log[i].pay = chore_log[i].pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+            if (!chore_log[i].image) {
+                chore_log[i].image = 'placeholder.png'
+            }
+        }
+
+        for (let i = 0; i < pay_log.length; i++) {
+            pay_log[i].timestamp = epoch_to_pretty(pay_log[i].timestamp)
+            pay_log[i].pay = pay_log[i].pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+        }
+
+        return res.render('index', { user: user, users: users, chores: chores, chore_log: chore_log, pay_log: pay_log })
     } else {
-        res.redirect('/login')
+        return res.redirect('/login')
     }
 })
 
-app.get('/user/:username', (req, res) => {
-    let username = req.params.username
-    let user = db.chain.get('users').find({ username: username }).value()
-    let chore_log = db.chain.get('chore_log').filter({ kid_name: username }).value()
+// view a user
+app.get('/user/:id', async (req, res) => {
+    let id = parseInt(req.params.id)
+
+    if (Number.isNaN(id)) {
+        return res.redirect('/')
+    }
+
+    // get the user info
+    let user = db.chain.get('users').find({ id: id }).cloneDeep().value()
+
+    if (!user) {
+        return res.redirect('/')
+    }
+
+    if (user.fw_id) {
+        user.internet_status = await get_status(user.fw_id)
+    }
+
+    // get the user's chores
+    let chore_log = db.chain.get('chore_log').filter({ user_id: id }).cloneDeep().value().reverse()
+
+    // get the user's pay entries
+    let pay_log = db.chain.get('pay_log').filter({ user_id: id }).cloneDeep().value().reverse()
+
+    // calculate total pay
     let pay = 0
-    for (let i = 0; i < chore_log.length; i++) {
-        pay += parseInt(chore_log[i].pay)
+    for (let i = 0; i < pay_log.length; i++) {
+        pay += parseFloat(pay_log[i].pay)
     }
+
+    // convert the pay to a normal form
     user.pay = pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
-    res.render('user', { user: user, chore_log: chore_log })
-})
 
-app.get('/chore/:name', (req, res) => {
-    let chore_name = req.params.name
-    let chore = db.chain.get('chores').find({ name: chore_name }).value()
-    let kids = db.chain.get('users').filter({ role: 'kid' }).value()
-    let chore_log = db.chain.get('chore_log').filter({ chore_name: chore_name }).value()
     for (let i = 0; i < chore_log.length; i++) {
-        chore_log[i].kid_image = db.chain.get('users').find({ username: chore_log[i].kid_name }).value().image
+        chore_log[i].timestamp = epoch_to_pretty(chore_log[i].timestamp)
+        chore_log[i].user_name = user.name
+        chore_log[i].pay = chore_log[i].pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
     }
 
-    res.render('chore', { user: req.session.user, chore: chore, chore_log: chore_log, kids: kids })
+    // convert pay and timestamp
+    for (let i = 0; i < pay_log.length; i++) {
+        pay_log[i].timestamp = epoch_to_pretty(pay_log[i].timestamp)
+        pay_log[i].pay = pay_log[i].pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+    }
+
+    // render
+    return res.render('user', { user: user, chore_log: chore_log, pay_log: pay_log })
 })
 
+
+// view a chore
+app.get('/chore/:id', (req, res) => {
+    let id = parseInt(req.params.id)
+
+    if (Number.isNaN(id)) {
+        return res.redirect('/')
+    }
+
+    let chore = db.chain.get('chores').find({ id: id }).cloneDeep().value()
+
+    if (!chore) {
+        return res.redirect('/')
+    }
+
+    let users = db.chain.get('users').filter({ role: 'kid' }).value()
+    let chore_log = db.chain.get('chore_log').filter({ chore_id: id }).cloneDeep().value()
+
+    chore.pay = chore.pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+
+    for (let i = 0; i < chore_log.length; i++) {
+        let user = db.chain.get('users').find({ id: chore_log[i].user_id }).value()
+        chore_log[i].timestamp = epoch_to_pretty(chore_log[i].timestamp)
+        chore_log[i].user_name = user.name
+        chore_log[i].user_image = user.image
+
+        if (!chore_log[i].image) {
+            chore_log[i].image = 'placeholder.png'
+        }
+
+        // convert pay
+        chore_log[i].pay = chore_log[i].pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+    }
+
+    return res.render('chore', { user: req.session.user, chore: chore, chore_log: chore_log, users: users })
+})
+
+
+// login redirect
 app.get('/login', (req, res) => {
     if (req.session.loggedin) {
-        res.redirect('/')
+        return res.redirect('/')
     } else {
-        res.render('login')
+        return res.render('login')
     }
 })
 
+// logout
 app.get('/logout', (req, res) => {
     if (req.session) {
         req.session.destroy()
     }
-    res.render('login')
+    return res.render('login')
 })
 
+// login
 app.post('/login', (req, res) => {
+    let message = ''
+
     if (req.session.loggedin) {
-        res.redirect('/')
+        return res.redirect('/')
     }
     else {
         if (req.body.username) { //&& req.body.password) {
-            let user = db.chain.get('users').find({ username: req.body.username }).pick(['username', 'role']).value() //, password: req.body.password }).value()
-            if (user) {
+            let user = db.chain.get('users').find({ username: req.body.username }).pick(['id', 'username', 'role']).value() //, password: req.body.password }).value()
+
+            if (user && user.role) {
                 req.session.loggedin = true
-                delete user.password
                 req.session.user = user
-                res.redirect('/')
+                return res.redirect('/')
             }
-        } else {
-            res.render('login', {
-                message: 'Invalid username or password'
-            })
         }
+        message = 'Invalid username or password.'
     }
+    return res.render('login', {
+        message: message
+    })
 })
 
+// add / edit user
 app.post('/user',
-    body('kid_username').isLength({ min: 1 }),
+    oneOf([
+    [
+        body('action').isIn(['new',]),
+        body('user_username').isLength({ min: 3 }),
+    ],
+        body('action').isIn(['update','delete', 'toggle_internet'])
+    ]),
+    async (req, res) => {
+        const errors = validationResult(req).array()
+
+        // make sure user is logged in
+        if (!req.session.loggedin) {
+            res.redirect('/login')
+        }
+
+        let found = db.chain.get('users').find({ id: parseInt(req.body.user_id) }).value()
+
+        // if there are no errors, do something
+        if (!errors.length) {
+            switch (req.body.action) {
+                case 'new':
+                case 'update':
+                    // not an admin
+                    if (req.session.user.role != 'admin') {
+                        errors.push({ msg: 'Access denied' })
+                        break
+                    }
+
+                    // new, but already exists
+                    if (found && req.body.action == 'new') {
+                        errors.push({ msg: 'Item already exists' })
+                        break
+                    }
+
+                    // not found, but trying to update
+                    else if (!found && req.body.action == 'update') {
+                        errors.push({ msg: 'Item does not exist' })
+                        break
+                    }
+
+                    // make sure password length is good
+                    if (req.body.user_password && req.body.user_password.length < 5) {
+                        errors.push({ msg: 'Password too short' })
+                        break
+                    }
+
+                    let user = { username: xss.inHTMLData(req.body.user_username), name: xss.inHTMLData(req.body.user_name), description: xss.inHTMLData(req.body.user_description), fw_id: req.body.user_fw_id, role: 'kid' }
+
+                    if (req.body.user_password) {
+                        user.password = req.body.user_password
+                    }
+
+                    // check if a image was uploaded
+                    if (req.body.user_image) {
+                        user.image = handle_upload(req.body.user_image)
+                    }
+
+                    // push the user
+                    if (req.body.action == 'new') {
+                        user.id = db.data.next_user_id++
+                        db.data.users.push(user)
+                    } else {
+                        db.chain.get('users').find({ id: parseInt(req.body.user_id) }).assign(user).value()
+                    }
+
+                    // save the db
+                    try {
+                        db.write()
+                        return res.status(200).json({ status: 'success' })
+                    } catch (e) {
+                        console.log(e)
+                    }
+
+                    break
+                // delete user
+                case 'delete':
+                    break
+
+                case 'toggle_internet':
+                    // not an admin
+                    if (req.session.user.role != 'admin') {
+                        errors.push({ msg: 'Access denied' })
+                        break
+                    }
+
+                    let result = await toggle_internet(found.fw_id, req.body.status)
+
+                    return res.status(200).json({ status: result })
+
+                    break
+
+                case 'default':
+                    errors.push({ msg: 'Invalid action' })
+                    break
+            }
+        }
+
+        return res.status(400).json({ status: 'error', errors: errors })        
+})
+
+// add / edit chore
+app.post('/chore',
+    oneOf([
+        [
+            body('action').isIn(['new']),
+            body('chore_name').isLength({ min: 1 }),
+            body('chore_description').isLength({ min: 1 })
+        ],
+        [
+            body('action').isIn(['finish', 'update','delete']),
+        ]
+    ]),
+    (req, res) => {
+        // make sure user is logged in
+        if (!req.session.loggedin) {
+            res.redirect('/login')
+        }
+
+        const errors = validationResult(req).array()
+
+        // get the chore if it exists
+        let found_chore = db.chain.get('chores').find({ id: parseInt(req.body.chore_id) }).value()
+
+        // if found, make sure we're  not remaking
+        if (found_chore && req.body.action == 'new') {
+            errors.push({ msg: 'Item already exists' })
+        // else, make sure chore exists
+        } else if (!found_chore && req.body.action != 'new') {
+            errors.push({ msg: 'Chore not found' })
+        }
+
+        // any errors?
+        if (!errors.length) {
+            // new or updating chore
+            switch (req.body.action) {
+                case 'new':
+                case 'update':
+                    // not an admin
+                    if (req.session.user.role != 'admin') {
+                        errors.push({ msg: 'Access denied' })
+                        break
+                    }
+
+                    let chore = {}
+                    if (req.body.chore_name != undefined) {
+                        chore.name = xss.inHTMLData(req.body.chore_name)
+                    }
+
+                    if (req.body.chore_description != undefined) {
+                        chore.description = xss.inHTMLData(req.body.chore_description)
+                    }
+
+                    if (req.body.chore_pay != undefined) {
+                        let pay = parseFloat(req.body.chore_pay.replace('$',''))
+                        if (pay) {
+                            chore.pay = pay
+                        } else {
+                            chore.pay = 0
+                        }
+                    }
+
+                    if (req.body.chore_assignment != undefined) {
+                        chore.assignment = parseInt(req.body.chore_assignment)
+                    }
+
+                    // check if a image was uploaded
+                    if (req.body.chore_image != undefined) {
+                        chore.image = handle_upload(req.body.chore_image)
+                    }
+
+                    if (req.body.chore_internet != undefined && req.body.chore_internet == 'on') {
+                        chore.internet = true
+                    } else {
+                        chore.internet = false
+                    }
+
+                    // push the chore
+                    if (req.body.action == 'new') {
+                        chore.id = db.data.next_chore_id++
+                        db.data.chores.push(chore)
+                    } else {
+                        db.chain.get('chores').find({ id: parseInt(req.body.chore_id) }).assign(chore).value()
+                    }
+
+                    // save the db
+                    try {
+                        db.write()
+                        return res.status(200).json({ status: 'success' })
+                    } catch (e) {
+                        next(e)
+                    }
+                break
+
+                case 'finish':
+                    // prepare the chore log
+                    let chore_log = { chore_id: found_chore.id, user_id: req.session.user.id, description: xss.inHTMLData(req.body.chore_finish_description), pay: found_chore.pay, status: 'pending', timestamp:  Date.now() }
+
+                    // check if a image was uploaded
+                    if (req.body.chore_image != undefined) {
+                        chore_log.image = handle_upload(req.body.chore_image)
+                    }
+
+                    // get next chore log id
+                    chore_log.id = db.data.next_chore_log_id++
+                    db.data.chore_log.push(chore_log)
+
+                    // save the db
+                    try {
+                        db.write()
+                        return res.status(200).json({ status: 'success' })
+                    } catch (e) {
+                        next(e)
+                    }
+                break
+
+                case 'delete':
+                break
+
+                default:
+                    errors.push({ msg: 'Invalid action' })
+                    break
+
+            }
+            
+        }
+
+        return res.status(400).json({ status: 'error', errors: errors })
+})
+
+// chore_log
+app.post('/chore_log',
+    body('chore_log_id').isLength({ min: 1 }),
+    body('action').isIn(['approve']),
     (req, res) => {
         const errors = validationResult(req).array()
 
@@ -200,119 +579,137 @@ app.post('/user',
             errors.push({ msg: 'Access denied' })
         }
 
-        let found = db.chain.get('users').find({ username: req.body.kid_username }).value()
-        // new, but already exists
-        if (found && req.body.action == 'new') {
-            errors.push({ msg: 'Item already exists' })
-        }
+        let found_chore_log = db.chain.get('chore_log').find({ id: parseInt(req.body.chore_log_id) }).value()
+        let found_chore = db.chain.get('chores').find({ id: parseInt(found_chore_log.chore_id) }).value()
 
-        // not found, but trying to update
-        else if (!found && req.body.action == 'update') {
-            errors.push({ msg: 'Item does not exist' })
-        }
-
-        // make sure password length is good
-        if (req.body.kid_password && req.body.kid_password.length < 8) {
-            errors.push({ msg: 'Password too short' })
-        }
- 
         if (!errors.length) {
-            if (req.body.action == 'new' || req.body.action == 'update') {
-                let kid = { username: xss.inHTMLData(req.body.kid_username), name: xss.inHTMLData(req.body.kid_name), description: xss.inHTMLData(req.body.kid_description), fw_id: req.body.kid_fw_id, role: 'kid' }
+            if (req.body.action == 'approve') {
+                if (found_chore_log) {
+                    // prepare the pay log
+                    let pay_log = { user_id: found_chore_log.user_id, pay: found_chore.pay, description: `Completed ${found_chore.name}.`, timestamp: Date.now() }
 
-                if (req.body.kid_password) {
-                    kid.password = req.body.kid_password
-                    if (kid.password.length < 8) {
-                        errors
+                    // get next pay log id
+                    pay_log.id = db.data.next_pay_log_id++
+                    db.data.pay_log.push(pay_log)
+
+                    // update chore
+                    found_chore_log.status = 'approved'
+                    found_chore_log.pay_log_id = pay_log.id
+                    db.chain.get('chore_log').find({ id: parseInt(req.body.chore_log_id) }).assign(found_chore_log).value()
+
+                    // save the db
+                    try {
+                        db.write()
+                        return res.status(200).json({ status: 'success' })
+                    } catch (e) {
+                        next(e)
                     }
-                }
-
-                // check if a image was uploaded
-                if (req.body.kid_image) {
-                    kid.image = handle_upload(req.body.kid_image)
-                }
-
-                // push the user
-                if (req.body.action == 'new') {
-                    db.data.users.push(kid)
                 } else {
-                    db.chain.get('users').find({ username: req.body.kid_username }).assign(kid).value()
-                }
-
-                // save the db
-                try {
-                    db.write()
-                    res.status(200).json({ status: 'success' })
-                } catch (e) {
-                    next(e)
+                    console.log('Chore log not found')
                 }
             }
-        } else {
-            return res.status(400).json({ status: 'error', errors: errors })
+            errors.push({ msg: 'Invalid action' })
         }
-})
 
-app.post('/chore',
-    body('chore_name').isLength({ min: 3 }),
-    (req, res) => {
-        const errors = validationResult(req).array()
-        let found = db.chain.get('chores').find({ name: req.body.chore_name }).value()
-        if (found && req.body.action == 'new') {
-            errors.push({ msg: 'Item already exists' })
-        }
-        if (!errors.length) {
-            if (req.body.action == 'new' || req.body.action == 'update') {
-                let chore = {}
-                chore.name = xss.inHTMLData(req.body.chore_name)
-
-                if (req.body.chore_description != undefined)
-                    chore.description = xss.inHTMLData(req.body.chore_description)
-
-                if (req.body.chore_pay != undefined)
-                    chore.pay = xss.inHTMLData(req.body.chore_pay)
-
-                if (req.body.chore_assignment != undefined)
-                    chore.assignment = xss.inHTMLData(req.body.chore_assignment)
-
-                // check if a image was uploaded
-                if (req.body.chore_image != undefined) {
-                    chore.image = handle_upload(req.body.chore_image)
-                }
-
-                // push the chore
-                if (req.body.action == 'new') {
-                    db.data.chores.push(chore)
-                } else {
-                    db.chain.get('chores').find({ name: req.body.chore_name }).assign(chore).value()
-                }
-
-                // save the db
-                try {
-                    db.write()
-                    return res.status(200).json({ status: 'success' })
-                } catch (e) {
-                    next(e)
-                }
-            }
-        }
         return res.status(400).json({ status: 'error', errors: errors })
 })
 
-app.post('/finish',
-    body('chore_finish_notes').isLength({ min: 3 }),
+// chore_log
+app.post('/pay_log',
+    body('user_id').isLength({ min: 1 }),
+    body('action').isIn(['new','update','delete']),
     (req, res) => {
         const errors = validationResult(req).array()
-        let found_chore = db.chain.get('chores').find({ name: req.body.chore_name }).value()
-        let found_user = db.chain.get('users').find({ username: req.body.kid_name }).value()
+
+        let found_user = null
+        let pay = parseFloat(req.body.pay_amount.replace('$',''))
+
+        // admin can pay anyone
+        if (req.session.user.role == 'admin') {
+            found_user = db.chain.get('users').find({ id: parseInt(req.body.user_id) }).value()
+        }
+        // not an admin, only allow self
+        else {
+            found_user = db.chain.get('users').find({ id: req.session.user.id }).value()
+
+            // cheater!
+            if (pay > 0) {
+                errors.push({ msg: 'Nice try, cheater' })
+            }
+
+            // get the user's pay entries
+            let pay_log = db.chain.get('pay_log').filter({ user_id: req.session.user.id }).cloneDeep().value().reverse()
+
+             // calculate total pay
+            let user_pay = 0
+            for (let i = 0; i < pay_log.length; i++) {
+                user_pay += parseFloat(pay_log[i].pay)
+            }
+
+            if (Math.abs(pay) > user_pay) {
+                errors.push({ msg: 'You\'re broke, sorry!  Do more chores.' })
+            }
+        }
+        
+        let found_pay_log = db.chain.get('pay_log').find({ id: parseInt(req.body.pay_log_id) }).value()
+
+        if (!errors.length) {
+            if (req.body.action == 'new') {
+                if (found_user) {
+                    //
+                    if (!req.body.pay_amount) {
+                        req.body.pay_amount = 0
+                    }
+
+                    // prepare the pay log
+                    let pay_log = { user_id: found_user.id, pay: pay, description: xss.inHTMLData(req.body.pay_description), timestamp:  Date.now() }
+
+                    // get next pay log id
+                    pay_log.id = db.data.next_pay_log_id++
+                    db.data.pay_log.push(pay_log)
+
+                    // save the db
+                    try {
+                        db.write()
+                        return res.status(200).json({ status: 'success' })
+                    } catch (e) {
+                        next(e)
+                    }
+                } else {
+                    console.log('Pay log not found')
+                }
+            }
+            else if (req.body.action == 'update') {
+
+            }
+            errors.push({ msg: 'Invalid action' })
+        }
+
+        return res.status(400).json({ status: 'error', errors: errors })
+})
+
+// finish a chore
+app.post('/finish',
+    body('chore_finish_description').isLength({ min: 3 }),
+    (req, res) => {
+        const errors = validationResult(req).array()
+        let chore_id = parseInt(req.body.chore_id)
+        let user_id = parseInt(req.session.user.id)
+        let found_chore = db.chain.get('chores').find({ id: chore_id }).value()
+        let found_user = db.chain.get('users').find({ id: user_id }).value()
         if (!errors.length) {
             if (req.body.action == 'finish') {
                 if (found_chore && found_user) {
-                    let chore_log = { chore_name: xss.inHTMLData(req.body.chore_name), kid_name: xss.inHTMLData(req.body.kid_name), notes: xss.inHTMLData(req.body.chore_finish_notes), pay: found_chore.pay }
+                    // prepare the chore log
+                    let chore_log = { chore_id: chore_id, user_id: user_id, description: xss.inHTMLData(req.body.chore_finish_description), pay: found_chore.pay, status: 'pending', timestamp:  Date.now() }
+
                     // check if a image was uploaded
                     if (req.body.chore_image != undefined) {
                         chore_log.image = handle_upload(req.body.chore_image)
                     }
 
+                    // get next chore log id
+                    chore_log.id = db.data.next_chore_log_id++
                     db.data.chore_log.push(chore_log)
 
                     // save the db
@@ -326,10 +723,12 @@ app.post('/finish',
                     console.log('Chore not found.')
                 }
             }
+            errors.push({ msg: 'Invalid action' })
         }
         return res.status(400).json({ status: 'error', errors: errors })
 })
 
+// listen
 app.listen(port, () => {
     console.log(`Listening on :${port}`)
 })

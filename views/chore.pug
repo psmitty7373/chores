@@ -3,7 +3,11 @@ html(lang="en")
   body
     include nav.pug
       li.nav-item
-        a.nav-link.active(href="#") Chore
+        a.nav-link.active(href="#") #{chore.name}
+      li.nav-item
+        span.nav-link /
+      li.nav-item
+        a.nav-link(href="/logout") Logout
 
     div.container
       h4.pt-3 #{chore.name}
@@ -11,36 +15,46 @@ html(lang="en")
         div.row.g-0
           div.col-md-3
             img(src='/images/' + chore.image, style="width: 100%")
-          div.col-md-9
+          div.col-md-7.col-lg-8
             div.card-body
               h5.card-title
                 span #{chore.name}
-                span.float-end
-                  button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="#chore-finish-modal") Finished
-                  if (user.role === "admin")
-                    button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#chore-modal") Edit
-                    button.btn.btn-danger Delete
+
               p.card-text #{chore.description}
-              h6 $#{chore.pay}
+              h6 #{chore.pay}
+              p.card-text Earns internet?: 
+                if (chore.internet)
+                  span.text-primary Yep! 🌐
+                else
+                  span.text-danger Nope! 📴
+
+          div.col-md-2.col-lg-1.p-1
+            div.d-grid.gap-2
+              if (user.role === "kid")
+                button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="#chore-finish-modal") Finished
+              if (user.role === "admin")
+                button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#chore-modal") Edit
+                button.btn.btn-danger Delete
+
     
       if (user.role === "admin")
         h4.pt-3 Assignment
         div.row
-          each kid in kids
+          each user in users
             div.col-lg-2.col-md-4.col-sm-6
-              if (kid.username === chore.assignment)
-                div.card(class={"card-focus": kid.username === chore.assignment} onclick="assign('', '" + chore.name + "');")
-                  img(src="/images/" + kid.image)
+              if (user.id == chore.assignment)
+                div.card(class={"card-focus": user.id == chore.assignment} onclick="assign('', " + chore.id + ");")
+                  img(src="/images/" + user.image)
                   div.card-body
                     a.stretched-link(href="#" style="color: inherit; text-decoration: inherit;")
-                    h5.card-title #{kid.name}
+                    h5.card-title #{user.name}
 
               else
-                div.card(class={"card-focus": kid.username === chore.assignment} onclick="assign('" + kid.username + "', '" + chore.name + "');")
-                  img(src="/images/" + kid.image)
+                div.card(class={"card-focus": user.id == chore.assignment} onclick="assign(" + user.id + ", " + chore.id + ");")
+                  img(src="/images/" + user.image)
                   div.card-body
                     a.stretched-link(href="#" style="color: inherit; text-decoration: inherit;")
-                    h5.card-title #{kid.name}
+                    h5.card-title #{user.name}
     
       h4.pt-3 Timeline
 
@@ -59,10 +73,11 @@ html(lang="en")
                   img(src='/images/' + log.image, style="width: 100%")
                 div.col-md-8
                   div.card-body
-                    p.card-text #{log.kid_name}, completed this task on ___ with this to say: "#{log.notes}" ~#{log.kid_name}
-                    p.card-text $#{log.pay}
+                    p.card-text #{log.user_name}, completed this task on #{log.timestamp} with this to say:
+                    p.cart-text "#{log.description}" ~#{log.user_name}
+                    p.card-text Amount earned: #{log.pay}
                 div.col-md-2
-                  img.circle-crop(src='/images/' + log.kid_image, style="float: right;")
+                  img.circle-crop(src='/images/' + log.user_image, style="float: right;")
       
     div.modal(id="chore-finish-modal" tabindex="-1")
       div.modal-dialog
@@ -80,11 +95,11 @@ html(lang="en")
                 label.col-form-label(for="chore-finish-image") Picture:
                 input.form-control(type="file" id="chore-finish-image" onchange="update_image(this, 'chore-finish-image-raw');")
     
-                label.col-form-label(for="chore-finish-notes") Notes:
-                input.form-control(type="text" name="chore_finish_notes" id="chore-finish-notes")
+                label.col-form-label(for="chore-finish-description") Notes:
+                input.form-control(type="text" name="chore_finish_description" id="chore-finish-description")
     
-                input(type="text" name="kid_name" value=user.username readonly style="display: none;")
-                input(type="text" name="chore_name" value=chore.name readonly style="display: none;")
+                input(type="text" name="user_id" value=user.id readonly style="display: none;")
+                input(type="text" name="chore_id" value=chore.id readonly style="display: none;")
                 input(type="text" name="action" value="finish" style="display: none;")
     
           div.modal-footer
@@ -107,7 +122,7 @@ html(lang="en")
                 input.form-control(type="file" id="chore-image" onchange="update_image(this, 'chore-image-raw');")
     
                 label.col-form-label(for="chore-name") Name:
-                input.form-control(type="text" name="chore_name" id="chore-name" value=chore.name readonly)
+                input.form-control(type="text" name="chore_name" id="chore-name" value=chore.name)
     
                 label.col-form-label(for="chore-description") Description:
                 input.form-control(type="text" name="chore_description" id="chore-description" value=chore.description)
@@ -115,10 +130,12 @@ html(lang="en")
                 label.col-form-label(for="chore-pay") Pay:
                 input.form-control(type="text" name="chore_pay" id="chore-pay" value=chore.pay)
     
-                label.col-form-label(for="chore-assignment") Assignment:
-                input.form-control(type="text" name="chore_assignment" id="chore-assignment" value=chore.assignment)
-    
+                input(type="hidden" name="chore_id" value=chore.id)
                 input(type="text" name="action" value="update" style="display: none;")
+
+                div.form-check.form-switch.mt-2
+                  label.form-check-label(for="chore-internet") Internet Earning?
+                  input.form-check-input(type="checkbox" name="chore_internet" id="chore-internet" checked=(chore.internet == true))
     
           div.modal-footer
             button.btn.btn-secondary(data-bs-dismiss="modal") Cancel

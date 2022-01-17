@@ -8,7 +8,11 @@ html(lang="en")
         span.nav-link /
       li.nav-item
         a.nav-link(href="/logout") Logout
- 
+
+    div.container
+      each error in errors 
+        div.alert.alert-danger(role="alert") #{error.msg}
+
     div.container
       h4.pt-3 #{user.username}
       div.card.mb-3
@@ -16,19 +20,20 @@ html(lang="en")
           div.col-md-3
             img(src='/images/' + user.image, style="width: 100%")
 
-          div.col-md-7.col-lg-8
+          div.col-md-7.col-lg-7
             div.card-body
               h5.card-title
                 span #{user.name}
               p.card-text #{user.description}
               h6.card-text Balance: #{user.pay}
 
-          div.col-md-2.col-lg-1.p-1
+          div.col-md-2.col-lg-2.p-1
             div.d-grid.gap-2
               button.btn.btn-primary(data-bs-toggle="modal" data-bs-target="#user-modal") Edit
               button.btn.btn-secondary(data-bs-toggle="modal" data-bs-target="#pay-modal") Pay
               div.form-check.form-switch.px-0
-                input.big-switch.form-check-input(type="checkbox" checked=(user.internet_status == true) onclick="toggle_internet(" + user.id + ", " + !user.internet_status + ")")
+                label.form-label(for="internet-status") Internet:
+                input.big-switch.form-check-input(type="checkbox" id="internet-status" checked=(user.internet_status == true) onclick="toggle_internet(" + user.id + ", " + !user.internet_status + ")")
       div.row
         div.col-md-8
           h4.pt-3 Chore Log

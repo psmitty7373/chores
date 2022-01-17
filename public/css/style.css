@@ -29,6 +29,11 @@
     color: #ea39b8 !important;
 }
 
+.navbar-nav {
+    flex-direction: row;
+    -ms-flex-direction: row;
+}
+
 .stamp {
     transform: rotate(12deg);
 	color: #555;

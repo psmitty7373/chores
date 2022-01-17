@@ -109,6 +109,10 @@ document.addEventListener('DOMContentLoaded', function(event) {
             event.preventDefault()
             const formData = Object.fromEntries(new FormData(event.target))
 
+            if (!formData.chore_internet) {
+                formData.chore_internet = false
+            }
+
             if (cropper) {
                 formData.chore_image = cropper.getCroppedCanvas({width: 640, height:480}).toDataURL()
             }

@@ -74,7 +74,7 @@ app.use(session(sess))
 
 function epoch_to_pretty(date) {
     date = new Date(date)
-    return (date.getMonth() + 1) + '-' + date.getDate() + '-' + date.getFullYear() + ' at ' + date.getHours() + ':' + date.getMinutes()
+    return (date.getMonth() + 1) + '-' + date.getDate() + '-' + date.getFullYear() + ' at ' + String(date.getHours()).padStart(2, "0") + ':' + String(date.getMinutes()).padStart(2, "0")
 }
 
 // file upload handler
@@ -124,8 +124,10 @@ async function get_status(rule_id) {
             })
 
             resp.on('end', () => {
-                resolve(data.includes('disable'))
+                resolve({ status: 'success', data: data.includes('disable') })
             })
+        }).on('error', (e) => {
+            resolve({ status: 'error', msg: 'error getting internet status' })
         })
     })
 }
@@ -146,7 +148,6 @@ async function toggle_internet(rule_id, status) {
             })
 
             resp.on('end', () => {
-                console.log('end', data)
                 resolve(data)
             })
         })
@@ -210,6 +211,7 @@ app.get('/', (req, res) => {
 // view a user
 app.get('/user/:id', async (req, res) => {
     let id = parseInt(req.params.id)
+    let errors = []
 
     if (Number.isNaN(id)) {
         return res.redirect('/')
@@ -223,7 +225,14 @@ app.get('/user/:id', async (req, res) => {
     }
 
     if (user.fw_id) {
-        user.internet_status = await get_status(user.fw_id)
+/*        let result = await get_status(user.fw_id)
+        if (result.status == 'success') {
+            user.internet_status = result.data
+        } else {
+            user.internet_status = false
+            errors.push({ msg: result.msg })
+        }
+*/
     }
 
     // get the user's chores
@@ -254,7 +263,7 @@ app.get('/user/:id', async (req, res) => {
     }
 
     // render
-    return res.render('user', { user: user, chore_log: chore_log, pay_log: pay_log })
+    return res.render('user', { user: user, chore_log: chore_log, pay_log: pay_log, errors: errors })
 })
 
 
@@ -276,6 +285,10 @@ app.get('/chore/:id', (req, res) => {
     let chore_log = db.chain.get('chore_log').filter({ chore_id: id }).cloneDeep().value()
 
     chore.pay = chore.pay.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+
+    if (!chore.image) {
+        chore.image = 'placeholder.png'
+    }
 
     for (let i = 0; i < chore_log.length; i++) {
         let user = db.chain.get('users').find({ id: chore_log[i].user_id }).value()
@@ -508,10 +521,12 @@ app.post('/chore',
                         chore.image = handle_upload(req.body.chore_image)
                     }
 
-                    if (req.body.chore_internet != undefined && req.body.chore_internet == 'on') {
-                        chore.internet = true
-                    } else {
-                        chore.internet = false
+                    if (req.body.chore_internet != undefined) {
+                        if (req.body.chore_internet == 'on') {  
+                            chore.internet = true
+                        } else {
+                            chore.internet = false
+                        }
                     }
 
                     // push the chore
@@ -533,7 +548,7 @@ app.post('/chore',
 
                 case 'finish':
                     // prepare the chore log
-                    let chore_log = { chore_id: found_chore.id, user_id: req.session.user.id, description: xss.inHTMLData(req.body.chore_finish_description), pay: found_chore.pay, status: 'pending', timestamp:  Date.now() }
+                    let chore_log = { chore_id: found_chore.id, user_id: req.session.user.id, chore_name: found_chore.name, description: xss.inHTMLData(req.body.chore_finish_description), pay: found_chore.pay, status: 'pending', timestamp:  Date.now() }
 
                     // check if a image was uploaded
                     if (req.body.chore_image != undefined) {
